@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}审核台 · AI 财务审核智能体{% endblock %}
+{% block content %}
+
+<div class="dash-head">
+  <div>
+    <h1 class="dash-title">AI 审批</h1>
+    <p class="muted">{{ r['文件'] }} · 审核于 {{ r['运行时间'] }} ·
+      信任等级 <b>{{ r['阶段'] }}</b>(滑杆 {{ r['信任滑杆'] }})</p>
+  </div>
+  <div class="dash-actions">
+    <a class="btn" href="{{ url_for('index') }}">换文件</a>
+    <a class="btn" href="{{ url_for('settings_page') }}">信任滑杆</a>
+    <form method="post" action="{{ url_for('ledger') }}" style="display:inline"
+          onsubmit="return confirm('把本批「自动通过/人工通过」的发票登记入已报销台账?登记后其他批次再报同一张发票会被直接拦截。')">
+      <button class="btn" type="submit">登记台账</button></form>
+    <a class="btn primary" href="{{ url_for('export') }}">导出审核结果 Excel</a>
+  </div>
+</div>
+
+{% if request.args.get('ledger_added') is not none %}
+<div class="okbox">已把 {{ request.args.get('ledger_added') }} 张发票登记入台账(台账现共 {{ request.args.get('ledger_total') }} 张)。
+其他批次若再报销同号发票,将命中【历史已报销】直接拦截。</div>
+{% endif %}
+
+{% if r['解析警告'] %}
+<div class="warnbox">大白话规则有 {{ r['解析警告']|length }} 条没看懂,已跳过:
+  {% for w in r['解析警告'] %}<div>· {{ w }}</div>{% endfor %}
+</div>
+{% endif %}
+{% if r['缺失列'] %}
+<div class="warnbox">数据表缺少关键列:{{ r['缺失列']|join('、') }},部分规则可能未生效。</div>
+{% endif %}
+
+<!-- KPI 指标卡 -->
+<div class="tiles">
+  <div class="tile"><div class="tile-label">总单据</div>
+    <div class="tile-value">{{ s['总单数'] }}</div>
+    <div class="tile-note">合计 ¥{{ '{:,.2f}'.format(s['总金额']) }}</div></div>
+  <div class="tile"><div class="tile-label">自动化率</div>
+    <div class="tile-value hero">{{ s['自动化率'] }}<span class="unit">%</span></div>
+    <div class="tile-note">其中 AI 放行 {{ s['AI放行'] }} 单</div></div>
+  <div class="tile"><div class="tile-label"><span class="dot d-pass"></span>自动通过</div>
+    <div class="tile-value">{{ s['分布']['自动通过'] }}</div>
+    <div class="tile-note">抽检名单 {{ s['抽检'] }} 单</div></div>
+  <div class="tile"><div class="tile-label"><span class="dot d-review"></span>需人工复核</div>
+    <div class="tile-value">{{ s['分布']['需人工复核'] }}</div>
+    <div class="tile-note">含防幻觉兜底转人工</div></div>
+  <div class="tile"><div class="tile-label"><span class="dot d-block"></span>拦截</div>
+    <div class="tile-value">{{ s['分布']['拦截'] }}</div>
+    <div class="tile-note">需补充说明后人工处理</div></div>
+</div>
+
+<!-- 风险分布 -->
+<section class="card">
+  <h2>风险分布</h2>
+  {% set n = s['总单数'] or 1 %}
+  <div class="stack" role="img" aria-label="风险分布">
+    {% if s['分布']['自动通过'] %}<div class="seg seg-pass" style="width:{{ s['分布']['自动通过']*100/n }}%"
+      title="自动通过 {{ s['分布']['自动通过'] }} 单"></div>{% endif %}
+    {% if s['分布']['需人工复核'] %}<div class="seg seg-review" style="width:{{ s['分布']['需人工复核']*100/n }}%"
+      title="需人工复核 {{ s['分布']['需人工复核'] }} 单"></div>{% endif %}
+    {% if s['分布']['拦截'] %}<div class="seg seg-block" style="width:{{ s['分布']['拦截']*100/n }}%"
+      title="拦截 {{ s['分布']['拦截'] }} 单"></div>{% endif %}
+  </div>
+  <div class="legend">
+    <span><i class="dot d-pass"></i>✓ 自动通过 {{ s['分布']['自动通过'] }} 单({{ (s['分布']['自动通过']*100/n)|round(1) }}%)</span>
+    <span><i class="dot d-review"></i>！需人工复核 {{ s['分布']['需人工复核'] }} 单({{ (s['分布']['需人工复核']*100/n)|round(1) }}%)</span>
+    <span><i class="dot d-block"></i>⛔ 拦截 {{ s['分布']['拦截'] }} 单({{ (s['分布']['拦截']*100/n)|round(1) }}%)</span>
+  </div>
+</section>
+
+<div class="grid2">
+  <!-- 规则命中 Top -->
+  <section class="card">
+    <h2>规则命中排行</h2>
+    <p class="muted small">按命中单据数(一单命中多次只计一次)</p>
+    {% if s['规则Top'] %}
+    {% set maxr = s['规则Top'][0][1] %}
+    <div class="bars">
+      {% for name, cnt in s['规则Top'] %}
+      <div class="bar-row" title="{{ name }}:{{ cnt }} 单">
+        <span class="bar-label">{{ name }}</span>
+        <span class="bar-track"><span class="bar b-blue" style="width:{{ cnt*100/maxr }}%"></span>
+        <span class="bar-val">{{ cnt }}</span></span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">本批数据没有命中任何规则。</p>{% endif %}
+  </section>
+
+  <!-- 部门风险排行 -->
+  <section class="card">
+    <h2>部门风险排行</h2>
+    <p class="muted small">按部门累计风险分</p>
+    {% if s['部门排行'] %}
+    {% set maxd = s['部门排行'][0]['风险分'] or 1 %}
+    <div class="bars">
+      {% for d in s['部门排行'] %}
+      <div class="bar-row" title="{{ d['部门'] }}:风险分 {{ d['风险分'] }},风险单 {{ d['风险单'] }}/{{ d['总数'] }}">
+        <span class="bar-label">{{ d['部门'] }}</span>
+        <span class="bar-track"><span class="bar b-aqua" style="width:{{ d['风险分']*100/maxd }}%"></span>
+        <span class="bar-val">{{ d['风险分'] }}</span></span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">暂无数据。</p>{% endif %}
+  </section>
+</div>
+
+<!-- 明细表 -->
+<section class="card">
+  <div class="table-head">
+    <h2>单据明细</h2>
+    <input id="q" type="search" placeholder="搜索 姓名/单号/部门/事由…">
+  </div>
+  <div class="chips">
+    <button class="chip on" data-f="all">全部 {{ s['总单数'] }}</button>
+    <button class="chip" data-f="拦截">⛔ 拦截 {{ s['分布']['拦截'] }}</button>
+    <button class="chip" data-f="需人工复核">！复核 {{ s['分布']['需人工复核'] }}</button>
+    <button class="chip" data-f="自动通过">✓ 通过 {{ s['分布']['自动通过'] }}</button>
+    <button class="chip" data-f="ai">AI 放行 {{ s['AI放行'] }}</button>
+    <button class="chip" data-f="抽检">抽检 {{ s['抽检'] }}</button>
+  </div>
+  <table class="tbl">
+    <thead><tr>
+      <th>单号</th><th>姓名</th><th>部门</th><th>日期</th><th>费用类型</th>
+      <th class="num">金额</th><th class="num">风险分</th><th>结论</th><th>命中规则</th><th>人工</th>
+    </tr></thead>
+    <tbody>
+    {% for rec in r['记录'] %}
+      <tr class="row" data-level="{{ rec['等级'] }}" data-ai="{{ 1 if rec['AI放行'] }}"
+          data-sample="{{ 1 if rec['抽检'] }}"
+          data-search="{{ rec['报销单号'] }} {{ rec['员工姓名'] }} {{ rec['部门'] }} {{ rec['费用类型'] }} {{ rec['事由'] }}"
+          onclick="toggle(this)">
+        <td>{{ rec['报销单号'] }}</td>
+        <td>{{ rec['员工姓名'] }}</td>
+        <td>{{ rec['部门'] }}</td>
+        <td>{{ rec['日期文本'] or rec['报销日期'] }} {{ rec['星期'] }}</td>
+        <td>{{ rec['费用类型'] }}</td>
+        <td class="num">{{ '{:,.2f}'.format(rec['_金额数值']) if rec['_金额数值'] is not none else rec['金额'] }}</td>
+        <td class="num">{{ rec['风险分'] }}</td>
+        <td><span class="badge lv-{{ rec['等级'] }}">{{ {'自动通过':'✓','需人工复核':'！','拦截':'⛔'}[rec['等级']] }} {{ rec['等级'] }}</span>
+            {% if rec['AI放行'] %}<span class="badge mini">AI 放行</span>{% endif %}
+            {% if rec['抽检'] %}<span class="badge mini warn">抽检</span>{% endif %}</td>
+        <td class="rules-cell">{% for h in rec['命中'][:3] %}<span class="badge rule">{{ h['名称'] }}</span>{% endfor %}{% if rec['命中']|length > 3 %}<span class="muted small">+{{ rec['命中']|length - 3 }}</span>{% endif %}</td>
+        <td>{% if rec['人工'] %}<span class="badge hm-{{ rec['人工']['决定'] }}">{{ rec['人工']['决定'] }}</span>{% endif %}</td>
+      </tr>
+      <tr class="detail"><td colspan="10">
+        <div class="opinion">
+          <div class="opinion-title">AI 审核意见</div>
+          <pre>{{ rec['意见'] }}</pre>
+          <div class="review-bar" data-no="{{ rec['报销单号'] }}">
+            <span class="muted small">人工裁决:</span>
+            <button class="btn sm ok" onclick="decide(event,this,'人工通过')">✓ 通过</button>
+            <button class="btn sm no" onclick="decide(event,this,'人工拒绝')">✗ 拒绝</button>
+            {% if rec['人工'] %}<button class="btn sm" onclick="decide(event,this,'撤销')">撤销裁决</button>
+            <span class="muted small">({{ rec['人工']['时间'] }} 已裁决:{{ rec['人工']['决定'] }})</span>{% endif %}
+            <input class="note" placeholder="备注(可选)" onclick="event.stopPropagation()">
+          </div>
+        </div>
+      </td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+
+{% block script %}
+<script>
+function toggle(tr){
+  var d = tr.nextElementSibling;
+  d.classList.toggle('open');
+}
+var filter = 'all';
+document.querySelectorAll('.chip').forEach(function(c){
+  c.addEventListener('click', function(){
+    document.querySelectorAll('.chip').forEach(function(x){x.classList.remove('on')});
+    c.classList.add('on'); filter = c.dataset.f; apply();
+  });
+});
+document.getElementById('q').addEventListener('input', apply);
+function apply(){
+  var q = document.getElementById('q').value.trim();
+  document.querySelectorAll('tr.row').forEach(function(tr){
+    var ok = true;
+    if(filter === 'ai') ok = tr.dataset.ai === '1';
+    else if(filter === '抽检') ok = tr.dataset.sample === '1';
+    else if(filter !== 'all') ok = tr.dataset.level === filter;
+    if(ok && q) ok = tr.dataset.search.indexOf(q) >= 0;
+    tr.style.display = ok ? '' : 'none';
+    var d = tr.nextElementSibling;
+    if(!ok) d.classList.remove('open');
+    d.style.display = ok ? '' : 'none';
+  });
+}
+function decide(ev, btn, decision){
+  ev.stopPropagation();
+  var bar = btn.closest('.review-bar');
+  fetch('/review', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({'单号': bar.dataset.no, '决定': decision, '备注': bar.querySelector('.note').value})
+  }).then(function(){ location.reload(); });
+}
+</script>
+{% endblock %}

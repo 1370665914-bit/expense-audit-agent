@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}AI 财务审核智能体{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark">审</span>
+      <span class="brand-name">AI 财务审核智能体</span>
+      <span class="brand-sub">本地离线版 · 数据不出电脑</span>
+    </div>
+    <nav class="nav">
+      <a href="{{ url_for('index') }}" class="{{ 'on' if active=='index' }}">工作台</a>
+      <a href="{{ url_for('fill') }}" class="{{ 'on' if active=='fill' }}">AI 填单</a>
+      <a href="{{ url_for('dashboard') }}" class="{{ 'on' if active=='dashboard' }}">AI 审批</a>
+      <a href="{{ url_for('archive') }}" class="{{ 'on' if active=='archive' }}">会计档案</a>
+      <a href="{{ url_for('settings_page') }}" class="{{ 'on' if active=='settings' }}">信任滑杆</a>
+    </nav>
+  </div>
+</header>
+<main class="page">
+{% block content %}{% endblock %}
+</main>
+<footer class="foot">全部计算在本机完成 · 不联网 · 不调用外部 AI 服务 · 规则可在「审核规则.xlsx」中用中文修改</footer>
+{% block script %}{% endblock %}
+</body>
+</html>

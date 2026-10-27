@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}电子会计档案 · AI 财务审核智能体{% endblock %}
+{% block content %}
+<div class="dash-head">
+  <div>
+    <h1 class="dash-title">电子会计档案</h1>
+    <p class="muted">发票、回单、报表的本地档案库:归档即计算 SHA-256 防篡改指纹,
+    自动识别发票元数据,内容相同的文件拒绝重复归档,发票号重复自动预警。</p>
+  </div>
+</div>
+
+{% if results %}
+<section class="card">
+  <h2>本次归档结果</h2>
+  {% for r in results %}
+    {% if r['错误'] %}
+    <div class="warnbox">✗ {{ r['文件'] }}:{{ r['错误'] }}</div>
+    {% else %}
+    <div class="okbox">✓ {{ r['文件'] }} → 档案号 {{ r['条目']['档案号'] }}
+      {% if r['条目']['发票号'] %}· 发票号 {{ r['条目']['发票号'] }}{% endif %}
+      {% if r['条目']['预警'] %}<b class="warn-ink">⚠ {{ r['条目']['预警'] }}</b>{% endif %}</div>
+    {% endif %}
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+  <div class="tile"><div class="tile-label">档案总数</div>
+    <div class="tile-value">{{ stats['总数'] }}</div><div class="tile-note">份</div></div>
+  <div class="tile"><div class="tile-label">本月归档</div>
+    <div class="tile-value">{{ stats['本月'] }}</div><div class="tile-note">份</div></div>
+  <div class="tile"><div class="tile-label">发票金额合计</div>
+    <div class="tile-value">{{ '{:,.0f}'.format(stats['金额合计']) }}</div><div class="tile-note">元(已识别部分)</div></div>
+  <div class="tile"><div class="tile-label"><span class="dot d-review"></span>重复预警</div>
+    <div class="tile-value">{{ stats['预警数'] }}</div><div class="tile-note">发票号与已有档案重复</div></div>
+</div>
+
+<section class="card">
+  <h2>归档新文件(可多选)</h2>
+  <form method="post" action="{{ url_for('archive_upload') }}" enctype="multipart/form-data">
+    <input type="file" name="files" multiple>
+    <input class="note" name="备注" placeholder="备注(可选,如:2026年6月报销批次)">
+    <button class="btn primary" type="submit">归档</button>
+  </form>
+  <p class="muted small" style="margin-top:10px">文件按 年/月 存入本机「档案库」文件夹,原件不动,归档的是副本。</p>
+</section>
+
+<section class="card">
+  <div class="table-head">
+    <h2>档案检索</h2>
+    <input id="q" type="search" placeholder="搜索 档案号/文件名/发票号/类别…">
+  </div>
+  {% if entries %}
+  <table class="tbl">
+    <thead><tr><th>档案号</th><th>原文件名</th><th>类别</th><th>发票号</th>
+      <th class="num">金额</th><th>开票日期</th><th>归档时间</th><th>指纹</th><th>备注</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+      <tr class="arow" data-search="{{ e['档案号'] }} {{ e['原文件名'] }} {{ e['发票号'] }} {{ e['类别'] }} {{ e['备注'] }}">
+        <td>{{ e['档案号'] }}</td>
+        <td>{{ e['原文件名'] }}</td>
+        <td>{{ e['类别'] }}</td>
+        <td>{{ e['发票号'] }}
+          {% if e['预警'] %}<span class="badge mini warn">⚠ 重号</span>{% endif %}</td>
+        <td class="num">{{ '{:,.2f}'.format(e['金额']) if e['金额'] is not none and e['金额'] != '' else '' }}</td>
+        <td>{{ e['开票日期'] }}</td>
+        <td class="muted small">{{ e['归档时间'] }}</td>
+        <td class="muted small" title="{{ e['指纹'] }}">{{ e['指纹'][:10] }}…</td>
+        <td class="muted small">{{ e['备注'] }}</td>
+        <td style="white-space:nowrap">
+          <a class="btn sm" href="{{ url_for('archive_download', no=e['档案号']) }}">下载</a>
+          <button class="btn sm" onclick="verify('{{ e['档案号'] }}', this)">验真</button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">档案库还是空的,归档第一份文件试试。</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block script %}
+<script>
+var q = document.getElementById('q');
+if (q) q.addEventListener('input', function(){
+  var v = q.value.trim();
+  document.querySelectorAll('tr.arow').forEach(function(tr){
+    tr.style.display = (!v || tr.dataset.search.indexOf(v) >= 0) ? '' : 'none';
+  });
+});
+function verify(no, btn){
+  btn.textContent = '验真中…';
+  fetch('/archive/verify/' + no).then(function(r){ return r.json(); }).then(function(d){
+    btn.textContent = '验真';
+    alert((d.ok ? '✓ ' : '✗ ') + no + ':' + d.msg);
+  });
+}
+</script>
+{% endblock %}

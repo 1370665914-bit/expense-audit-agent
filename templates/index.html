@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero card">
+  <h1>人会疲惫,规则不会。</h1>
+  <p class="hero-sub">三个模块,全部在本机离线运行:
+  <a href="{{ url_for('fill') }}"><b>AI 填单</b></a>(扔凭证→自动识别生成报销草稿)、
+  <b>AI 审批</b>(多维规则检查→评分→自动通过/复核/拦截)、
+  <a href="{{ url_for('archive') }}"><b>电子会计档案</b></a>(归档+防篡改指纹+查重验真)。
+  当前信任等级:<b>{{ stage }}</b>(滑杆 {{ settings['信任滑杆'] }})
+  <a href="{{ url_for('settings_page') }}">调整 →</a></p>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>① 选择要审核的明细文件</h2>
+    <form method="post" action="{{ url_for('run') }}" enctype="multipart/form-data">
+      {% if files %}
+      <div class="file-list">
+        {% for f in files %}
+        <label class="file-row">
+          <input type="radio" name="file" value="{{ f }}"
+                 {{ 'checked' if f == settings['最近文件'] or (loop.first and not settings['最近文件']) }}>
+          <span>{{ f }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted">还没有找到 Excel 文件,可以在下面上传一份。</p>
+      {% endif %}
+      <p class="muted small">或上传新文件(仅保存在本机「审核智能体/数据」文件夹):</p>
+      <input type="file" name="upload" accept=".xlsx">
+      <div class="actions"><button type="submit" class="btn primary">开始审核</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>② 规则怎么改 —— 写文档即配系统</h2>
+    <p>所有规则都在 <b>审核规则.xlsx</b> 里,用 Excel 打开就能改,保存后下次审核立即生效:</p>
+    <ul class="plainlist">
+      <li><b>费用限额</b>:各费用类型的单笔限额</li>
+      <li><b>大白话规则</b>:用中文写,如「事由 含 酒水 且 金额 超过 500」→ 拦截</li>
+      <li><b>内置规则</b>:10 条内置审计规则的开关与风险分</li>
+      <li><b>参数</b>:大额线、高频阈值等</li>
+    </ul>
+    <p class="muted small">文件位置:{{ rules_path }}</p>
+    <h2 style="margin-top:20px">③ 三道安全底线</h2>
+    <ul class="plainlist">
+      <li><b>防幻觉兜底</b>:金额/日期/发票号等要素缺失时,AI 不猜测,强制转人工</li>
+      <li><b>拦截优先</b>:命中拦截级规则的单据,无论信任滑杆多高都不放行</li>
+      <li><b>人工抽检</b>:AI 放行的单据按比例列入抽检名单,权力始终在你手中</li>
+    </ul>
+  </section>
+</div>
+{% endblock %}

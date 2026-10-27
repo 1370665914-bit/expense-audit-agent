@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Runtime state (regenerated locally)
+档案库/
+已报销台账.json
+复核记录.json
+数据/报销草稿.xlsx
+审核结果.xlsx
+
+# OS
+.DS_Store

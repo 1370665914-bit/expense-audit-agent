@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}信任滑杆 · AI 财务审核智能体{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>信任滑杆</h1>
+  <p class="muted">决定 AI 可以自主放行多少单据。权力永远在你手中 ——
+  拦截级风险和要素缺失的单据,无论滑到多高都不会被 AI 放行。</p>
+  {% if saved %}<div class="okbox">已保存,下次审核立即生效。</div>{% endif %}
+
+  <form method="post">
+    <div class="slider-wrap">
+      <input type="range" name="信任滑杆" id="trust" min="0" max="100" step="5"
+             value="{{ settings['信任滑杆'] }}" oninput="upd(this.value)">
+      <div class="slider-scale"><span>0</span><span>30</span><span>70</span><span>100</span></div>
+    </div>
+    <div class="stages">
+      <div class="stage" id="st0">
+        <h3>试用期(0–29)</h3>
+        <p>AI 只做建议:除完全无风险的单据外,全部转人工。适合刚上线、还在校验规则的阶段。</p>
+      </div>
+      <div class="stage" id="st1">
+        <h3>转正期(30–69)</h3>
+        <p>AI 独立放行<b>低风险</b>单据(风险分 ≤ {{ settings['低风险线'] }}),中高风险仍转人工。</p>
+      </div>
+      <div class="stage" id="st2">
+        <h3>专家期(70–100)</h3>
+        <p>AI 自主放行拦截线以下的全部单据,并按 {{ settings['抽检比例'] }}% 比例生成人工抽检名单。</p>
+      </div>
+    </div>
+    <p class="cur">当前:滑杆 <b id="tv">{{ settings['信任滑杆'] }}</b> → <b id="sn">{{ stage }}</b></p>
+
+    <h2>高级阈值</h2>
+    <div class="fields">
+      <label>低风险线(分)<input type="number" name="低风险线" value="{{ settings['低风险线'] }}" min="1" max="99"></label>
+      <label>拦截线(分)<input type="number" name="高风险线" value="{{ settings['高风险线'] }}" min="10" max="500"></label>
+      <label>抽检比例(%)<input type="number" name="抽检比例" value="{{ settings['抽检比例'] }}" min="0" max="100"></label>
+    </div>
+    <p class="muted small">风险分 ≥ 拦截线,或命中任何拦截级规则 → 直接拦截;要素缺失 → 防幻觉兜底,强制人工。</p>
+    <div class="actions">
+      <button class="btn primary" type="submit">保存</button>
+      <a class="btn" href="{{ url_for('dashboard') }}">返回审核台</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
+{% block script %}
+<script>
+function upd(v){
+  v = parseInt(v);
+  document.getElementById('tv').textContent = v;
+  var s = v < 30 ? 0 : (v < 70 ? 1 : 2);
+  document.getElementById('sn').textContent = ['试用期','转正期','专家期'][s];
+  [0,1,2].forEach(function(i){
+    document.getElementById('st'+i).classList.toggle('on', i===s);
+  });
+}
+upd(document.getElementById('trust').value);
+</script>
+{% endblock %}

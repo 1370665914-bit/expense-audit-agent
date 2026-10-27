@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}AI 填单 · AI 财务审核智能体{% endblock %}
+{% block content %}
+<div class="dash-head">
+  <div>
+    <h1 class="dash-title">AI 填单</h1>
+    <p class="muted">扔凭证,替代填表单:上传 发票 / 微信截图 / 行程单(图片或 PDF),
+    本机自动识别生成报销草稿。<b>AI 只生成草稿</b>,识别不出的字段留空提示,补全与提交责任在报销人。</p>
+  </div>
+</div>
+
+{% if results %}
+<section class="card">
+  <h2>本次识别结果</h2>
+  {% for r in results %}
+    {% if r['错误'] %}
+    <div class="warnbox">✗ {{ r['文件'] }}:{{ r['错误'] }}</div>
+    {% else %}
+    <div class="okbox">✓ {{ r['文件'] }} → 草稿 {{ r['行']['报销单号'] }}
+      ({{ r['行']['识别方式'] }}):{{ r['行']['费用类型'] or '类型待定' }}
+      {{ r['行']['金额'] if r['行']['金额'] != '' else '金额待补' }} 元,
+      {{ r['行']['报销日期'] or '日期待补' }}
+      {% if r['行']['发票号'] %}· 发票号 {{ r['行']['发票号'] }}{% endif %}
+      <span class="muted small">{{ r['行']['识别备注'] }}</span></div>
+    {% endif %}
+  {% endfor %}
+</section>
+{% endif %}
+
+<div class="grid2">
+  <section class="card">
+    <h2>① 上传凭证(可多选)</h2>
+    <form method="post" action="{{ url_for('fill_upload') }}" enctype="multipart/form-data">
+      <input type="file" name="vouchers" multiple accept=".jpg,.jpeg,.png,.heic,.bmp,.tiff,.webp,.pdf">
+      <div class="actions"><button class="btn primary" type="submit">识别并生成草稿</button></div>
+    </form>
+    <p class="muted small" style="margin-top:12px">
+      支持:电子发票 PDF / 发票照片 / 微信支付截图 / 滴滴行程单。识别用的是 macOS 系统自带的
+      离线文字识别,凭证不会离开这台电脑。上传多张会自动拆成多行草稿(多场景智能拆单)。</p>
+  </section>
+  <section class="card">
+    <h2>② 补全草稿</h2>
+    <p>识别不出的字段(如姓名、部门)需要人工补全。两种方式:</p>
+    <ul class="plainlist">
+      <li>直接用 Excel 打开草稿文件补全后保存</li>
+      <li>删掉识别错误的行,重新上传更清晰的凭证</li>
+    </ul>
+    <p class="muted small">草稿文件:{{ draft_path }}</p>
+    <h2 style="margin-top:16px">③ 送去 AI 审批</h2>
+    <p class="muted small">草稿本身就是一份标准报销明细,一键送审后按同样的规则检查、评分、分级。</p>
+  </section>
+</div>
+
+<section class="card">
+  <div class="table-head">
+    <h2>报销草稿({{ drafts|length }} 行)</h2>
+    <div class="dash-actions">
+      {% if drafts %}
+      <form method="post" action="{{ url_for('fill_clear') }}" style="display:inline"
+            onsubmit="return confirm('确定清空全部草稿?')">
+        <button class="btn" type="submit">清空草稿</button></form>
+      <form method="post" action="{{ url_for('fill_submit') }}" style="display:inline">
+        <button class="btn primary" type="submit">送去 AI 审批 →</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% if drafts %}
+  <table class="tbl">
+    <thead><tr><th>草稿号</th><th>姓名</th><th>部门</th><th>日期</th><th>费用类型</th>
+      <th class="num">金额</th><th>发票号</th><th>事由</th><th>凭证</th><th>识别备注</th><th></th></tr></thead>
+    <tbody>
+    {% for d in drafts %}
+      <tr>
+        <td>{{ d['报销单号'] }}</td>
+        <td>{{ d['员工姓名'] or '待补' }}</td>
+        <td>{{ d['部门'] or '待补' }}</td>
+        <td>{{ d['报销日期'] or '待补' }}</td>
+        <td>{{ d['费用类型'] or '待补' }}</td>
+        <td class="num">{{ d['金额'] if d['金额'] != '' else '待补' }}</td>
+        <td>{{ d['发票号'] }}</td>
+        <td>{{ d['事由'] }}</td>
+        <td class="muted small">{{ d['凭证文件'] }}</td>
+        <td class="muted small">{{ d['识别备注'] }}</td>
+        <td><form method="post" action="{{ url_for('fill_delete') }}">
+          <input type="hidden" name="单号" value="{{ d['报销单号'] }}">
+          <button class="btn sm no" type="submit">删</button></form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">还没有草稿,上传凭证试试。</p>
+  {% endif %}
+</section>
+{% endblock %}
